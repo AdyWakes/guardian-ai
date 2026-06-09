@@ -1,63 +1,88 @@
 # GitHub Copilot Usage Log
 
-This file is for the Microsoft Agents League requirement that the project demonstrate meaningful GitHub Copilot usage during development.
+The Microsoft Agents League requires evidence of meaningful **GitHub Copilot**
+usage during development. This file is where you record that evidence.
 
-Do not fabricate evidence. Before submission, add screenshots or short notes from your real Copilot/Copilot Chat sessions.
+> **Do not fabricate evidence.** This log must reflect real Copilot / Copilot
+> Chat sessions. The fastest honest path is to actually run the short tasks in
+> the "Quick ways to generate real evidence" section below, then screenshot
+> them and fill in the table.
 
-## Required Evidence
+## How to capture evidence
 
-- Copilot suggestions used to accelerate code writing.
-- Copilot Chat used for problem-solving, debugging, or code explanation.
-- Notes explaining how Copilot assisted the creative and engineering process.
+For each Copilot session:
 
-## Suggested Entries To Fill
+1. Use **GitHub Copilot** (inline completions) or **Copilot Chat** in VS Code
+   (or your IDE) on this repository.
+2. Take a screenshot showing the Copilot suggestion or chat response.
+3. Save the screenshot under `docs/copilot/` (create the folder) and link it.
+4. Fill in one row of the log below.
 
-### 1. Safety Mode Conversation Flow
+## Quick ways to generate real evidence (≈15 min total)
 
-- Date:
-- Copilot tool used: GitHub Copilot / Copilot Chat
-- Prompt or task:
-- What Copilot helped with:
-- Files affected:
-  - `src/app/safety/page.tsx`
-  - `src/app/api/chat/route.ts`
-  - `src/lib/safetyConversation.ts`
-- Evidence screenshot/link:
+These are genuine, useful Copilot tasks on this exact codebase. Running them
+produces real, honest evidence — and may even improve the project.
 
-### 2. Foundry IQ Adapter
+1. **Explain code with Copilot Chat.** Open `src/lib/foundryIQ.ts`, select
+   `assessWithFoundryAgent`, and ask Copilot Chat: *"Explain what this function
+   does and why it uses agent_reference instead of the model field."*
+   Screenshot the explanation.
 
-- Date:
-- Copilot tool used: GitHub Copilot / Copilot Chat
-- Prompt or task:
-- What Copilot helped with:
-- Files affected:
-  - `src/lib/foundryIQ.ts`
-  - `src/lib/riskAssessment.ts`
-- Evidence screenshot/link:
+2. **Generate a unit test.** Open `src/lib/safetyConversation.ts` and ask
+   Copilot Chat: *"Write a unit test for applyYesNoToLastQuestion covering yes,
+   no, and a non-yes/no message."* Screenshot the generated test.
 
-### 3. Telegram Alert Integration
+3. **Inline completion.** In `src/lib/riskAssessment.ts`, start typing a new
+   helper (e.g. a comment `// format a short risk label for the UI`) and let
+   Copilot autocomplete the function body. Screenshot the ghost-text suggestion.
 
-- Date:
-- Copilot tool used: GitHub Copilot / Copilot Chat
-- Prompt or task:
-- What Copilot helped with:
-- Files affected:
-  - `src/lib/telegram.ts`
-  - `src/app/api/send-alert/route.ts`
-- Evidence screenshot/link:
+4. **Debugging help.** Paste a real error you hit during this build (e.g. the
+   Foundry `DeploymentNotFound` 404) into Copilot Chat and ask how to diagnose
+   it. Screenshot the response.
 
-### 4. Debugging Notes
+## Usage log
 
-- Date:
-- Issue debugged with Copilot Chat:
-- Summary of Copilot's suggestion:
-- What changed after debugging:
-- Evidence screenshot/link:
+Fill one row per session. Add as many as you have.
 
-## Summary For README Or Demo
+| # | Date | Tool | Task / prompt | What Copilot helped with | Files | Evidence |
+|---|------|------|---------------|--------------------------|-------|----------|
+| 1 |      | Copilot Chat | _e.g. "Explain assessWithFoundryAgent"_ | _e.g. clarified the Responses API flow_ | `src/lib/foundryIQ.ts` | `docs/copilot/01.png` |
+| 2 |      | Copilot Chat | | | `src/lib/safetyConversation.ts` | |
+| 3 |      | Copilot (inline) | | | `src/lib/riskAssessment.ts` | |
+| 4 |      | Copilot Chat | | | | |
 
-Use this after filling the entries above:
+## Detailed notes (optional)
+
+Expand any row that deserves more context.
+
+### Session 1 — _title_
+
+- **Date:**
+- **Tool:** GitHub Copilot Chat
+- **Prompt:**
+- **What Copilot suggested:**
+- **What you kept / changed:**
+- **Evidence:** `docs/copilot/01.png`
+
+### Session 2 — _title_
+
+- **Date:**
+- **Tool:**
+- **Prompt:**
+- **What Copilot suggested:**
+- **What you kept / changed:**
+- **Evidence:**
+
+## Summary for README / demo video
+
+Write 2–3 sentences here once the log is filled, describing how Copilot
+assisted. Keep it truthful to what the log above actually shows. Example
+shape (rewrite to match your real usage):
 
 ```text
-GitHub Copilot assisted Guardian AI by accelerating TypeScript component work, explaining Next.js API route issues, and helping debug the safety conversation flow. Copilot Chat was used to reason through the Foundry IQ adapter, Telegram alert handling, and demo-mode fallback behavior.
+GitHub Copilot Chat was used to explain the Azure AI Foundry Responses API
+integration, generate unit tests for the safety-conversation state machine,
+and help diagnose the Foundry DeploymentNotFound error during setup. Inline
+Copilot completions accelerated routine TypeScript in the risk-assessment
+pipeline.
 ```
