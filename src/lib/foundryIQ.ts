@@ -69,9 +69,13 @@ type ResponsesEnvelope = {
   error?: { message?: string; code?: string };
 };
 
-// Foundry Responses API version. If a future stable version supersedes
-// this preview, bump it here only - everything else is version-agnostic.
-const API_VERSION = '2024-12-01-preview';
+// The Responses API uses path-based versioning ("/openai/v1/...") and
+// explicitly REJECTS an api-version query parameter:
+//   400 BadRequest: "api-version query parameter is not allowed when
+//   using /v1 path"
+// So the URL builder below intentionally does NOT append one. If a future
+// Foundry endpoint needs api-version on a different path, branch in
+// buildFoundryUrl rather than re-adding it globally.
 
 /**
  * Source-of-truth for the agent's instructions. Kept in code (rather than
@@ -172,8 +176,7 @@ const buildFoundryUrl = (path: string): string => {
     throw new Error('Missing Azure AI Foundry endpoint');
   }
 
-  const separator = path.includes('?') ? '&' : '?';
-  return `${normalizeEndpoint(endpoint)}${path}${separator}api-version=${API_VERSION}`;
+  return `${normalizeEndpoint(endpoint)}${path}`;
 };
 
 const buildFoundryHeaders = (): HeadersInit => {
