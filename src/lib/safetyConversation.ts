@@ -1,5 +1,7 @@
 import { assessRisk, RiskAssessment, RiskLevel } from './riskAssessment';
 
+export type SafetyQuestionKey = 'isBeingFollowed' | 'canSpeakSafely' | 'isAlone';
+
 export interface ConversationState {
   userMessage: string;
   canSpeakSafely: boolean | null;
@@ -10,6 +12,13 @@ export interface ConversationState {
   audioClipStatus: string | null;
   declaredSafety: 'safe' | 'unsafe' | 'unknown';
   placeContext: 'home' | 'public' | 'vehicle' | 'unknown';
+  /**
+   * The safety follow-up question Guardian asked on the previous turn, if
+   * any. A bare "yes"/"no" reply from the user is then routed to this field
+   * so the chat actually progresses instead of asking the same question
+   * again. Cleared after the answer is applied.
+   */
+  lastQuestion: SafetyQuestionKey | null;
 }
 
 export interface ConversationTurnResult {
@@ -31,6 +40,37 @@ export const initialConversationState: ConversationState = {
   audioClipStatus: null,
   declaredSafety: 'unknown',
   placeContext: 'unknown',
+  lastQuestion: null,
+};
+
+const YES_PATTERN = /^(yes|yeah|yep|yup|y|true|correct|affirmative|sure|right|absolutely|definitely)[\s.!?]*$/i;
+const NO_PATTERN = /^(no|nope|nah|n|false|not really|negative|never|nay)[\s.!?]*$/i;
+
+const isYesNoAnswer = (message: string): boolean | null => {
+  const trimmed = message.trim();
+  if (YES_PATTERN.test(trimmed)) return true;
+  if (NO_PATTERN.test(trimmed)) return false;
+  return null;
+};
+
+/**
+ * If the user replied with a bare yes/no and we previously asked a specific
+ * safety question, route the answer to that field. Returns the patched
+ * state (or the input unchanged if there is no pending question to answer).
+ */
+const applyYesNoToLastQuestion = (
+  state: ConversationState,
+  message: string,
+): ConversationState => {
+  if (!state.lastQuestion) return state;
+  const answer = isYesNoAnswer(message);
+  if (answer === null) return state;
+
+  return {
+    ...state,
+    [state.lastQuestion]: answer,
+    lastQuestion: null,
+  };
 };
 
 const hasImmediateDangerIntent = (message: string) =>
@@ -175,17 +215,31 @@ export const estimateConversationRisk = (state: ConversationState): RiskLevel =>
   return 'LOW';
 };
 
-const getNextSafetyQuestion = (state: ConversationState) => {
+interface NextQuestion {
+  key: SafetyQuestionKey;
+  text: string;
+}
+
+const getNextSafetyQuestion = (state: ConversationState): NextQuestion | null => {
   if (state.isBeingFollowed === null) {
-    return 'Is anyone following or threatening you?';
+    return {
+      key: 'isBeingFollowed',
+      text: 'Is anyone following or threatening you right now?',
+    };
   }
 
   if (state.canSpeakSafely === null) {
-    return 'Can you speak safely, or should we keep this silent?';
+    return {
+      key: 'canSpeakSafely',
+      text: 'Are you able to speak out loud safely right now?',
+    };
   }
 
   if (state.isAlone === null) {
-    return 'Are you alone?';
+    return {
+      key: 'isAlone',
+      text: 'Are you alone right now?',
+    };
   }
 
   return null;
@@ -206,7 +260,7 @@ const buildStatusReply = (state: ConversationState) => {
     const question = getNextSafetyQuestion(state);
 
     return `I am treating this as MEDIUM risk. Move toward a safer or public place if you can, and keep your phone ready.${
-      question ? ` ${question}` : ' I can prepare the alert preview now.'
+      question ? ` ${question.text}` : ' I can prepare the alert preview now.'
     }`;
   }
 
@@ -227,6 +281,36 @@ const buildActionReply = (state: ConversationState) => {
   return 'Take immediate measures: get to people or a secure place, use silent emergency features if you cannot speak, call emergency services if possible, and send the alert.';
 };
 
+/**
+ * Build a result with bookkeeping for the next turn: if `nextQuestion` is
+ * provided, store its key on `lastQuestion` so a bare yes/no on the next
+ * turn lands on the right field.
+ */
+const buildResult = ({
+  reply,
+  state,
+  risk,
+  riskAssessment,
+  offerAssessment,
+  autoAlertRequested,
+  nextQuestion,
+}: {
+  reply: string;
+  state: ConversationState;
+  risk: RiskLevel;
+  riskAssessment: RiskAssessment | null;
+  offerAssessment: boolean;
+  autoAlertRequested: boolean;
+  nextQuestion?: NextQuestion | null;
+}): ConversationTurnResult => ({
+  reply,
+  state: { ...state, lastQuestion: nextQuestion?.key ?? null },
+  risk_estimate: risk,
+  risk_assessment: riskAssessment,
+  offer_assessment: offerAssessment,
+  auto_alert_requested: autoAlertRequested,
+});
+
 export const respondToSafetyMessage = async ({
   message,
   state,
@@ -240,81 +324,140 @@ export const respondToSafetyMessage = async ({
     ...initialConversationState,
     ...state,
   };
-  const updatedState = mergeState(currentState, message, activationMode);
+
+  // If the user replied "yes"/"no" to the question we asked on the previous
+  // turn, route the answer to the right state field before the regular
+  // merge runs. Without this, a bare "no" falls through every branch and
+  // the bot loops on the same question.
+  const stateAfterYesNo = applyYesNoToLastQuestion(currentState, message);
+  const yesNoApplied = stateAfterYesNo !== currentState;
+  const lastQuestionKey = currentState.lastQuestion;
+
+  const updatedState = mergeState(stateAfterYesNo, message, activationMode);
   const risk = estimateConversationRisk(updatedState);
   const shouldAssess = isActionRequest(message) || risk === 'HIGH' || /\b(very unsafe|assess now|prepare alert)\b/i.test(message);
   const riskAssessment = shouldAssess ? await assessRisk(updatedState) : null;
   const autoAlertRequested = isAutoAlertRequest(message) && risk !== 'LOW';
 
+  // If a yes/no was just applied to a follow-up question, acknowledge the
+  // answer and either ask the next question or move to the status reply.
+  if (yesNoApplied && lastQuestionKey) {
+    const nextQuestion = getNextSafetyQuestion(updatedState);
+    const acknowledgement = (() => {
+      const answerWasYes = updatedState[lastQuestionKey] === true;
+      switch (lastQuestionKey) {
+        case 'isBeingFollowed':
+          return answerWasYes
+            ? 'Understood — someone is following or threatening you. Treating this as urgent.'
+            : 'Good — no one is following or threatening you right now.';
+        case 'canSpeakSafely':
+          return answerWasYes
+            ? 'Good — you can speak safely.'
+            : 'Understood — keep things silent. I will avoid suggesting you talk out loud.';
+        case 'isAlone':
+          return answerWasYes
+            ? 'Understood — you are alone.'
+            : 'Good — you have other people nearby.';
+        default:
+          return 'Got it.';
+      }
+    })();
+
+    const followUp = nextQuestion
+      ? ` ${nextQuestion.text}`
+      : risk === 'LOW'
+        ? ' From what you have told me, this looks LOW risk. I will stay on standby.'
+        : ' I have enough to prepare a risk assessment now.';
+
+    return buildResult({
+      reply: `${acknowledgement}${followUp}`,
+      state: updatedState,
+      risk,
+      riskAssessment,
+      offerAssessment: risk !== 'LOW',
+      autoAlertRequested: false,
+      nextQuestion,
+    });
+  }
+
   if (isCapabilityQuestion(message)) {
-    return {
+    return buildResult({
       reply:
         'I can listen in normal language, estimate risk, prepare a safety plan, request location, capture a short emergency clip, and send a Telegram alert to your saved contact. I am still a prototype, so call emergency services directly for immediate danger.',
       state: updatedState,
-      risk_estimate: risk,
-      risk_assessment: riskAssessment,
-      offer_assessment: risk !== 'LOW',
-      auto_alert_requested: false,
-    };
+      risk,
+      riskAssessment,
+      offerAssessment: risk !== 'LOW',
+      autoAlertRequested: false,
+    });
   }
 
   if (isGreeting(message) && updatedState.userMessage === message) {
-    return {
-      reply:
-        'I am here. Tell me what is happening in your own words.',
+    return buildResult({
+      reply: 'I am here. Tell me what is happening in your own words.',
       state: updatedState,
-      risk_estimate: risk,
-      risk_assessment: riskAssessment,
-      offer_assessment: false,
-      auto_alert_requested: false,
-    };
+      risk,
+      riskAssessment,
+      offerAssessment: false,
+      autoAlertRequested: false,
+    });
   }
 
   if (isStatusQuestion(message)) {
-    return {
+    return buildResult({
       reply: buildStatusReply(updatedState),
       state: updatedState,
-      risk_estimate: risk,
-      risk_assessment: riskAssessment,
-      offer_assessment: risk !== 'LOW',
-      auto_alert_requested: false,
-    };
+      risk,
+      riskAssessment,
+      offerAssessment: risk !== 'LOW',
+      autoAlertRequested: false,
+    });
   }
 
   if (isActionRequest(message) || hasUnsafeIntent(message)) {
-    const question = !autoAlertRequested && risk !== 'LOW' ? getNextSafetyQuestion(updatedState) : null;
+    const nextQuestion = !autoAlertRequested && risk !== 'LOW' ? getNextSafetyQuestion(updatedState) : null;
 
-    return {
+    return buildResult({
       reply: `${
         autoAlertRequested
           ? 'I am starting the alert now: location, emergency clip, then your saved Telegram contact. Keep moving toward people or a safer place if you can.'
           : buildActionReply(updatedState)
-      }${question ? ` ${question}` : ''}`,
+      }${nextQuestion ? ` ${nextQuestion.text}` : ''}`,
       state: updatedState,
-      risk_estimate: risk,
-      risk_assessment: riskAssessment,
-      offer_assessment: risk !== 'LOW',
-      auto_alert_requested: autoAlertRequested,
-    };
+      risk,
+      riskAssessment,
+      offerAssessment: risk !== 'LOW',
+      autoAlertRequested,
+      nextQuestion,
+    });
   }
 
   if (hasSafeIntent(message)) {
-    return {
+    return buildResult({
       reply: buildStatusReply(updatedState),
       state: updatedState,
-      risk_estimate: risk,
-      risk_assessment: riskAssessment,
-      offer_assessment: false,
-      auto_alert_requested: false,
-    };
+      risk,
+      riskAssessment,
+      offerAssessment: false,
+      autoAlertRequested: false,
+    });
   }
 
-  return {
-    reply: 'I am listening. I do not see an emergency signal yet. Tell me if you feel unsafe, cannot speak, are being followed, or want me to send an alert.',
+  // Fall-through: nothing matched. If we still owe the user a follow-up
+  // question (they replied to "are you alone?" with a sentence that didn't
+  // hit any branch), keep the conversation moving instead of stalling.
+  const fallbackQuestion = risk !== 'LOW' ? getNextSafetyQuestion(updatedState) : null;
+  const fallbackText = fallbackQuestion
+    ? `Got it. ${fallbackQuestion.text}`
+    : 'I am listening. I do not see an emergency signal yet. Tell me if you feel unsafe, cannot speak, are being followed, or want me to send an alert.';
+
+  return buildResult({
+    reply: fallbackText,
     state: updatedState,
-    risk_estimate: risk,
-    risk_assessment: riskAssessment,
-    offer_assessment: risk !== 'LOW',
-    auto_alert_requested: false,
-  };
+    risk,
+    riskAssessment,
+    offerAssessment: risk !== 'LOW',
+    autoAlertRequested: false,
+    nextQuestion: fallbackQuestion,
+  });
 };

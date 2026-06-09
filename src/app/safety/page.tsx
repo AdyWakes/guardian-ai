@@ -26,6 +26,8 @@ interface Message {
   content: string;
 }
 
+type SafetyQuestionKey = "isBeingFollowed" | "canSpeakSafely" | "isAlone";
+
 interface AssessmentState {
   userMessage: string;
   canSpeakSafely: boolean | null;
@@ -36,6 +38,8 @@ interface AssessmentState {
   audioClipStatus: string | null;
   declaredSafety: "safe" | "unsafe" | "unknown";
   placeContext: "home" | "public" | "vehicle" | "unknown";
+  /** The safety follow-up question Guardian asked last; routes a yes/no reply. */
+  lastQuestion: SafetyQuestionKey | null;
 }
 
 interface RuntimeStatus {
@@ -98,6 +102,7 @@ const initialAssessment: AssessmentState = {
   audioClipStatus: null,
   declaredSafety: "unknown",
   placeContext: "unknown",
+  lastQuestion: null,
 };
 
 type SpeechRecognitionConstructor = new () => {
