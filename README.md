@@ -4,6 +4,13 @@
 
 Guardian AI is a hackathon MVP for the Microsoft Agents League, built for the Reasoning Agents track.
 
+### 🔗 Live demo: **https://guardian-ai-peach.vercel.app**
+
+Open `/safety`, type *"I feel unsafe walking home alone at night"*, and watch the
+right-rail reasoning trace ground its assessment in **Microsoft Foundry IQ**
+(look for the **"Foundry IQ · live"** badge). A single Azure AI Foundry agent
+call does both knowledge retrieval and multi-step risk reasoning.
+
 ## What Guardian AI Does
 
 Guardian AI is a web-based AI safety companion for potentially unsafe situations. It gathers quick context, retrieves safety guidance, classifies risk, creates an action plan, previews an emergency message, and can send that message through Telegram, with optional WhatsApp Cloud API support.
