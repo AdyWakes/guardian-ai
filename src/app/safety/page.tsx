@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -214,6 +214,15 @@ export default function SafetyPage() {
   const [voiceStatus, setVoiceStatus] = useState(
     'Say "Guardian" followed by your concern to start the voice demo.'
   );
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Auto-scroll the chat to the latest message or to the loading spinner
+  // whenever either changes. Without this, agent replies that come after
+  // a couple of turns hide below the fold, which made the demo look like
+  // the bot wasn't responding.
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages, isAssessing, isSendingAlert]);
 
   useEffect(() => {
     const loadRuntimeStatus = async () => {
@@ -741,6 +750,8 @@ export default function SafetyPage() {
                 </div>
               </div>
             )}
+            {/* Sentinel element scrolled into view by the auto-scroll effect. */}
+            <div ref={messagesEndRef} aria-hidden="true" />
           </div>
 
           <div className="border-t border-slate-200 bg-white p-4">
@@ -819,16 +830,9 @@ export default function SafetyPage() {
               </div>
             )}
 
-            {riskResult && (
-              <button
-                onClick={sendAlert}
-                disabled={isSendingAlert}
-                className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emergency-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emergency-700 disabled:opacity-50"
-              >
-                {isSendingAlert ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
-                Send Alert
-              </button>
-            )}
+            {/* Send Alert button intentionally lives only on the RiskPanel
+                so the action sits next to the risk context. A duplicate
+                button used to appear here, which looked noisy on camera. */}
           </div>
         </section>
 
