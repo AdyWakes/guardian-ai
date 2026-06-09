@@ -34,23 +34,26 @@ This prototype is designed for demos and judging. It is not a replacement for em
 
 ## Microsoft IQ / Foundry IQ Integration
 
-The Microsoft IQ integration is isolated in [src/lib/foundryIQ.ts](src/lib/foundryIQ.ts). The app calls `retrieveSafetyKnowledge(query)` from the risk assessment pipeline.
+The Microsoft IQ integration is isolated in [src/lib/foundryIQ.ts](src/lib/foundryIQ.ts). The risk assessment pipeline calls the configured Azure AI Foundry agent first, then falls back to local mock knowledge if Foundry is unavailable.
 
-When Azure AI Foundry environment variables are present, the adapter uses the Azure AI Foundry Agent Service REST flow:
+When Azure AI Foundry environment variables are present, the adapter uses the Microsoft Foundry project Responses API:
 
 ```text
-POST /threads/runs
-poll GET /threads/{threadId}/runs/{runId}
-GET /threads/{threadId}/messages
+POST {projectEndpoint}/openai/v1/responses
+body: {
+  "agent_reference": { "type": "agent_reference", "name": "<agent-name>" },
+  "input": "structured safety situation"
+}
 ```
 
-The agent is instructed to return safety knowledge in JSON. The app normalizes that into:
+The agent is instructed to return a complete safety assessment in JSON. The app uses that result directly:
 
 ```ts
 {
-  knowledge: SafetyKnowledge[];
+  risk_level: "LOW" | "MEDIUM" | "HIGH";
+  reasoning_summary: string;
+  immediate_steps: string[];
   sources: string[];
-  isDemoMode: boolean;
 }
 ```
 
@@ -143,7 +146,8 @@ Set these variables for real integrations, or leave them blank for demo mode:
 ```env
 AZURE_AI_FOUNDRY_ENDPOINT=https://your-ai-services-resource.services.ai.azure.com/api/projects/your-project
 AZURE_AI_FOUNDRY_API_KEY=your-api-key-or-bearer-token
-AZURE_AI_AGENT_ID=your-agent-id
+AZURE_AI_AGENT_NAME=your-agent-name
+AZURE_AI_AGENT_VERSION=
 
 TELEGRAM_BOT_TOKEN=your-bot-token
 TELEGRAM_CHAT_ID=your-chat-id

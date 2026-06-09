@@ -26,8 +26,8 @@ Do not rely on this Codex chat as Copilot evidence. The requirement specifically
 Guardian AI uses Foundry IQ as the Microsoft IQ layer:
 
 - Code boundary: `src/lib/foundryIQ.ts`
-- Public function: `retrieveSafetyKnowledge(query)`
-- Real path: Azure AI Foundry Agent Service when env vars are configured
+- Public live function: `assessWithFoundryAgent(input)`
+- Real path: Azure AI Foundry Agent Service Responses API with `agent_reference`
 - Demo path: local `data/safetyKnowledge.json` fallback
 
 For the strongest submission, configure a real Foundry Agent and show `/api/status` returning:
@@ -58,7 +58,8 @@ Required for live integrations:
 ```env
 AZURE_AI_FOUNDRY_ENDPOINT=
 AZURE_AI_FOUNDRY_API_KEY=
-AZURE_AI_AGENT_ID=
+AZURE_AI_AGENT_NAME=
+AZURE_AI_AGENT_VERSION=
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
 ```

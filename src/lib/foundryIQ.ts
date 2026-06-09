@@ -18,20 +18,22 @@ export interface RetrievedKnowledge {
 /**
  * Azure AI Foundry Agent Service - Responses API shapes.
  *
- * Foundry's "new" agent format (Microsoft Foundry, post-2024) exposes
- * agents through the OpenAI Responses API rather than the older
- * Assistants/Threads/Runs API. Agents are addressed by their human-readable
- * `agent_name` passed in the `model` field. The agent's instructions,
- * tools, and knowledge sources are configured in the Foundry portal and
- * applied automatically on each call.
+ * Foundry's "new" agent format exposes agents through the OpenAI Responses
+ * API rather than the older Assistants/Threads/Runs API. Project-scoped
+ * Responses calls select an agent with the request-body `agent_reference`
+ * object. The agent's instructions, tools, and knowledge sources are
+ * configured in the Foundry portal and applied automatically on each call.
  *
  * Reference Python sample (Azure SDK):
- *   project_client.get_openai_client(agent_name=...).responses.create(input=...)
+ *   openai.responses.create(
+ *     extra_body={"agent_reference": {"name": AGENT_NAME, "type": "agent_reference"}},
+ *     input="..."
+ *   )
  *
  * Equivalent raw REST shape, which is what this module calls:
- *   POST {projectEndpoint}/openai/v1/responses?api-version=...
+ *   POST {projectEndpoint}/openai/v1/responses
  *   api-key: <project key>
- *   { "model": "<agent_name>", "input": "<user query>" }
+ *   { "agent_reference": { "type": "agent_reference", "name": "<agent_name>" }, "input": "<user query>" }
  */
 type ResponsesAnnotation = {
   type?: string;
@@ -163,7 +165,7 @@ export const isFoundryConfigured = (): boolean => {
   return Boolean(
     process.env.AZURE_AI_FOUNDRY_ENDPOINT &&
       process.env.AZURE_AI_FOUNDRY_API_KEY &&
-      process.env.AZURE_AI_AGENT_ID
+      (process.env.AZURE_AI_AGENT_NAME || process.env.AZURE_AI_AGENT_ID)
   );
 };
 
@@ -542,22 +544,28 @@ const parseAssessmentFromAgentText = (text: string): FoundryAssessmentResult | n
 export const assessWithFoundryAgent = async (
   input: FoundryAssessmentInput,
 ): Promise<FoundryAssessmentResult> => {
-  const agentId = process.env.AZURE_AI_AGENT_ID;
-  if (!agentId) {
-    throw new Error('Missing Azure AI agent id');
+  const agentName = process.env.AZURE_AI_AGENT_NAME || process.env.AZURE_AI_AGENT_ID;
+  if (!agentName) {
+    throw new Error('Missing Azure AI agent name');
   }
 
   const headers = buildFoundryHeaders();
+  // Keep the project Responses endpoint in the URL. Foundry selects the
+  // configured agent through `agent_reference` in the request body. Passing
+  // the agent name as `model` makes Foundry look for a model deployment;
+  // putting it in the URL path can miss the project Responses route.
   const url = buildFoundryUrl('/openai/v1/responses');
+  const agentVersion = process.env.AZURE_AI_AGENT_VERSION?.trim();
+  const agentReference =
+    agentVersion && agentVersion.length > 0
+      ? { type: 'agent_reference', name: agentName, version: agentVersion }
+      : { type: 'agent_reference', name: agentName };
 
   const envelope = await fetchJson<ResponsesEnvelope>(url, {
     method: 'POST',
     headers,
     body: JSON.stringify({
-      // The `model` field carries the agent name for Foundry agents. The
-      // agent's portal-configured model, tools, instructions, and knowledge
-      // sources are applied by Foundry on its side.
-      model: agentId,
+      agent_reference: agentReference,
       input: buildAgentInput(input),
     }),
   });

@@ -155,11 +155,10 @@ This module owns the Foundry IQ boundary.
 Real Foundry Agent flow:
 
 ```text
-create thread and run
-poll run status
-list assistant messages
-parse safety knowledge
-normalize sources
+POST {projectEndpoint}/openai/v1/responses
+send agent_reference in the request body
+parse agent JSON risk assessment
+merge file-search citations and model-reported sources
 ```
 
 ### src/lib/riskAssessment.ts
@@ -230,7 +229,8 @@ Demo mode includes:
 ```env
 AZURE_AI_FOUNDRY_ENDPOINT=
 AZURE_AI_FOUNDRY_API_KEY=
-AZURE_AI_AGENT_ID=
+AZURE_AI_AGENT_NAME=
+AZURE_AI_AGENT_VERSION=
 TELEGRAM_BOT_TOKEN=
 TELEGRAM_CHAT_ID=
 WHATSAPP_ACCESS_TOKEN=
