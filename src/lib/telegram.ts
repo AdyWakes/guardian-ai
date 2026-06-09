@@ -30,6 +30,20 @@ const dataUrlToBlob = (attachment: TelegramAttachment): Blob => {
   return new Blob([Buffer.from(base64, 'base64')], { type: attachment.mimeType });
 };
 
+/**
+ * Send a Guardian AI media clip to Telegram.
+ *
+ * We always use sendDocument rather than sendVideo/sendAudio:
+ * - The browser MediaRecorder produces audio/webm;codecs=opus, which
+ *   Telegram's sendAudio rejects (it expects mp3/m4a). The old code
+ *   would silently 400 after the text alert had already been sent,
+ *   surfacing as a confusing partial failure on the demo.
+ * - sendDocument accepts any container, including webm, so the clip
+ *   always arrives. The receiving Telegram client renders it as a
+ *   downloadable file; modern clients can preview common formats.
+ *
+ * The caption gives the recipient context about what the clip is.
+ */
 const sendTelegramAttachment = async (
   attachment: TelegramAttachment
 ): Promise<void> => {
@@ -43,19 +57,24 @@ const sendTelegramAttachment = async (
   const formData = new FormData();
   formData.append('chat_id', chatId);
   formData.append(
-    attachment.type,
+    'document',
     dataUrlToBlob(attachment),
-    attachment.filename ?? `guardian-alert.${attachment.type === 'video' ? 'webm' : 'webm'}`
+    attachment.filename ?? `guardian-alert-${Date.now()}.webm`,
+  );
+  formData.append(
+    'caption',
+    attachment.type === 'video'
+      ? 'Guardian AI emergency video clip'
+      : 'Guardian AI emergency audio clip',
   );
 
-  const endpoint = attachment.type === 'video' ? 'sendVideo' : 'sendAudio';
-  const response = await fetch(`https://api.telegram.org/bot${botToken}/${endpoint}`, {
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendDocument`, {
     method: 'POST',
     body: formData,
   });
 
   if (!response.ok) {
-    const errorData = await response.json();
+    const errorData = await response.json().catch(() => ({}));
     throw new Error(`Telegram media error: ${errorData.description || response.statusText}`);
   }
 };
@@ -93,16 +112,38 @@ const sendRealTelegramMessage = async (
 
     const data = await response.json();
 
+    // Send attachments independently so a single failed clip cannot make
+    // the overall alert look like it failed. The text alert above already
+    // landed; clip failures are degraded-not-failed.
+    let sentClips = 0;
+    let failedClips = 0;
+    const clipErrors: string[] = [];
+
     for (const attachment of attachments) {
-      await sendTelegramAttachment(attachment);
+      try {
+        await sendTelegramAttachment(attachment);
+        sentClips += 1;
+      } catch (clipError) {
+        failedClips += 1;
+        const reason = clipError instanceof Error ? clipError.message : 'Unknown error';
+        clipErrors.push(`${attachment.type} clip failed: ${reason}`);
+        console.error('Telegram attachment send failed:', clipError);
+      }
+    }
+
+    const messageParts: string[] = [];
+    if (sentClips > 0) {
+      messageParts.push(`Alert and ${sentClips} emergency clip(s) sent to Telegram.`);
+    } else {
+      messageParts.push('Alert sent to Telegram.');
+    }
+    if (failedClips > 0) {
+      messageParts.push(`${failedClips} clip(s) could not be attached.`);
     }
 
     return {
       success: true,
-      message:
-        attachments.length > 0
-          ? `Alert and ${attachments.length} emergency clip(s) sent to Telegram.`
-          : 'Alert sent to Telegram.',
+      message: messageParts.join(' '),
       isDemoMode: false,
       messageId: data.result?.message_id,
     };
