@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sendTelegramAlert, TelegramAttachment } from '@/lib/telegram';
 import { sendWhatsAppAlert, WhatsAppAttachment } from '@/lib/whatsapp';
+import { guardSensitiveRoute } from '@/lib/apiGuard';
 
 const buildUserAlertMessage = ({
   telegramResult,
@@ -30,8 +31,16 @@ const buildUserAlertMessage = ({
 
 export async function POST(request: NextRequest) {
   try {
+    // Abuse protection: /api/send-alert can deliver to the operator's real
+    // Telegram chat, so reject cross-origin callers and throttle bursts
+    // before doing any work. See src/lib/apiGuard.ts for the rationale.
+    const blocked = guardSensitiveRoute(request);
+    if (blocked) {
+      return blocked;
+    }
+
     const body = await request.json();
-    
+
     // Validate required fields
     if (!body.message || typeof body.message !== 'string') {
       return NextResponse.json(
