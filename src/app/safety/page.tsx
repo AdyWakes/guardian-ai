@@ -417,28 +417,70 @@ export default function SafetyPage() {
     });
   };
 
+  // Capture a clip and send it as a follow-up message, AFTER the critical
+  // text alert has already gone out. Runs without holding the main spinner so
+  // a slow/denied camera prompt never blocks (or appears to freeze) the
+  // important part of the alert. Failures here are non-fatal: the text alert
+  // and location were already delivered.
+  const sendFollowUpClip = async () => {
+    addAgentMessage(
+      "Now capturing a short emergency clip to send as a follow-up. Allow camera/mic if prompted, or ignore it to skip the clip."
+    );
+
+    try {
+      const attachments = await recordEmergencyClip();
+
+      if (attachments.length === 0) {
+        addAgentMessage(
+          "No clip was attached (camera/mic not granted in time). Your text alert and location were already delivered."
+        );
+        return;
+      }
+
+      const clipResponse = await fetch("/api/send-alert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: "Emergency media clip (follow-up to the alert above).",
+          attachments,
+        }),
+      });
+
+      if (!clipResponse.ok) {
+        throw new Error("Follow-up clip send failed");
+      }
+
+      const clipResult: SendAlertResponse = await clipResponse.json();
+      addAgentMessage(`Follow-up clip handled. ${getClipSummary(attachments, clipResult)}`);
+    } catch (error) {
+      console.error("Follow-up clip error:", error);
+      addAgentMessage(
+        "The follow-up clip could not be sent, but your text alert and location were already delivered."
+      );
+    }
+  };
+
   const runAutomaticAlert = async (
     stateForAlert: AssessmentState,
     existingAssessment: RiskAssessment | null
   ) => {
     setIsSendingAlert(true);
-    addAgentMessage("Starting alert: getting location and a short video clip. If camera access is blocked, I will try audio.");
+    addAgentMessage("Sending alert now: getting your location and notifying your saved contact.");
 
     try {
-      const [location, attachments] = await Promise.all([getCurrentLocation(), recordEmergencyClip()]);
+      // Location is fast when permission is already granted and fails fast
+      // when denied (8s cap). Unlike the camera clip, it is worth waiting on
+      // because it goes into the critical alert.
+      const location = await getCurrentLocation();
       const updatedState = {
         ...stateForAlert,
         location: location ?? stateForAlert.location,
-        audioClipStatus:
-          attachments.length > 0
-            ? `${attachments[0].type} emergency clip captured and attached`
-            : "Emergency clip permission unavailable or denied",
       };
       setAssessment(updatedState);
 
       let assessmentForAlert = existingAssessment;
 
-      if (!assessmentForAlert || updatedState.location !== stateForAlert.location || attachments.length > 0) {
+      if (!assessmentForAlert || updatedState.location !== stateForAlert.location) {
         const assessmentResponse = await fetch("/api/assess", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -457,12 +499,14 @@ export default function SafetyPage() {
 
       setEstimatedRisk(assessmentForAlert.risk_level);
 
+      // CRITICAL STEP: send text + location immediately, with no attachments,
+      // so the important alert lands fast and never waits on a camera prompt.
       const alertResponse = await fetch("/api/send-alert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: assessmentForAlert.emergency_message,
-          attachments,
+          attachments: [],
         }),
       });
 
@@ -478,10 +522,15 @@ export default function SafetyPage() {
       }
 
       addAgentMessage(
-        `Alert flow complete. ${alertResult.message} Location ${
+        `Alert sent. ${alertResult.message} Location ${
           updatedState.location ? "included" : "not available"
-        }. ${getClipSummary(attachments, alertResult)}`
+        }.`
       );
+
+      // Critical alert is delivered - release the main spinner before the
+      // optional, slower clip capture so the UI never looks frozen.
+      setIsSendingAlert(false);
+      await sendFollowUpClip();
     } catch (error) {
       console.error("Automatic alert error:", error);
       addAgentMessage(
@@ -706,16 +755,17 @@ export default function SafetyPage() {
     }
 
     setIsSendingAlert(true);
-    addAgentMessage("Sending alert now. I will try to attach a short video clip.");
+    addAgentMessage("Sending alert now to your saved contact.");
 
     try {
-      const attachments = await recordEmergencyClip();
+      // CRITICAL STEP: send text + the alert's location immediately, no clip,
+      // so it lands fast and never waits on a camera prompt.
       const response = await fetch("/api/send-alert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: riskResult.emergency_message,
-          attachments,
+          attachments: [],
         }),
       });
 
@@ -725,10 +775,17 @@ export default function SafetyPage() {
 
       const result: SendAlertResponse = await response.json();
       addAgentMessage(
-        result.success
-          ? `Alert flow complete. ${result.message} ${getClipSummary(attachments, result)}`
-          : `Alert was not sent: ${result.message}`
+        result.success ? `Alert sent. ${result.message}` : `Alert was not sent: ${result.message}`
       );
+
+      if (!result.success) {
+        return;
+      }
+
+      // Critical alert delivered - release the spinner, then capture the
+      // optional clip as a non-blocking follow-up.
+      setIsSendingAlert(false);
+      await sendFollowUpClip();
     } catch (error) {
       console.error("Alert error:", error);
       addAgentMessage("Failed to send the alert. Contact emergency services directly if needed.");
