@@ -830,8 +830,8 @@ export default function SafetyPage() {
         </div>
       )}
 
-      <div className="mx-auto grid min-h-[calc(100vh-73px)] w-full max-w-6xl gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <section className="flex min-h-[640px] flex-col overflow-hidden rounded-lg border border-white/10 bg-white text-slate-900 shadow-2xl shadow-slate-950/30">
+      <div className="mx-auto grid min-h-[calc(100vh-73px)] w-full max-w-6xl gap-4 p-4 lg:h-[calc(100vh-73px)] lg:min-h-0 lg:overflow-hidden lg:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="flex min-h-[520px] flex-col overflow-hidden rounded-lg border border-white/10 bg-white text-slate-900 shadow-2xl shadow-slate-950/30 lg:h-full lg:min-h-0">
           <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
             <div>
               <p className="text-sm font-semibold">Safety chat</p>
@@ -952,7 +952,7 @@ export default function SafetyPage() {
           </div>
         </section>
 
-        <aside className="space-y-4">
+        <aside className="space-y-4 lg:h-full lg:overflow-y-auto lg:pr-1">
           <ReasoningTrace assessment={assessment} riskResult={riskResult} isAssessing={isAssessing} />
 
           {riskResult ? (
