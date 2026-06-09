@@ -730,7 +730,7 @@ export default function SafetyPage() {
             {messages.map((message) => (
               <div
                 key={message.id}
-                className={`flex ${message.type === "user" ? "justify-end" : "justify-start"}`}
+                className={`flex animate-slide-in ${message.type === "user" ? "justify-end" : "justify-start"}`}
               >
                 <div
                   className={`max-w-[82%] rounded-lg px-4 py-3 text-sm leading-relaxed ${
@@ -837,6 +837,8 @@ export default function SafetyPage() {
         </section>
 
         <aside className="space-y-4">
+          <ReasoningTrace assessment={assessment} riskResult={riskResult} isAssessing={isAssessing} />
+
           {riskResult ? (
             <RiskPanel result={riskResult} onSendAlert={sendAlert} isSendingAlert={isSendingAlert} />
           ) : (
@@ -925,6 +927,139 @@ export default function SafetyPage() {
         </aside>
       </div>
     </main>
+  );
+}
+
+function ReasoningTrace({
+  assessment,
+  riskResult,
+  isAssessing,
+}: {
+  assessment: AssessmentState;
+  riskResult: RiskAssessment | null;
+  isAssessing: boolean;
+}) {
+  const hasContext = Boolean(assessment.userMessage);
+  const hasResult = Boolean(riskResult);
+
+  const stages = [
+    {
+      key: "understand",
+      label: "Understand the situation",
+      detail: hasContext
+        ? "Captured your message and safety facts"
+        : "Waiting for your first message",
+      done: hasContext,
+      badge: null as string | null,
+    },
+    {
+      key: "retrieve",
+      label: "Retrieve safety knowledge",
+      detail: riskResult
+        ? `${riskResult.retrieved_sources.length} grounded source${
+            riskResult.retrieved_sources.length === 1 ? "" : "s"
+          }`
+        : "Foundry IQ knowledge base",
+      done: hasResult,
+      badge: riskResult ? (riskResult.is_demo_mode ? "Local fallback" : "Foundry IQ · live") : null,
+    },
+    {
+      key: "classify",
+      label: "Classify risk level",
+      detail: riskResult ? `${riskResult.risk_level} risk` : "LOW · MEDIUM · HIGH",
+      done: hasResult,
+      badge: null,
+    },
+    {
+      key: "plan",
+      label: "Build the action plan",
+      detail: riskResult
+        ? `${riskResult.immediate_steps.length} prioritized step${
+            riskResult.immediate_steps.length === 1 ? "" : "s"
+          }`
+        : "Personalized next steps",
+      done: hasResult,
+      badge: null,
+    },
+  ];
+
+  // The first not-yet-done stage is the one currently in flight while we wait.
+  const activeIndex = isAssessing ? stages.findIndex((stage) => !stage.done) : -1;
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/5 p-5">
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-100">
+        <Brain className="h-4 w-4 text-guardian-300" />
+        How Guardian is reasoning
+      </h2>
+      <p className="mt-1 text-xs leading-relaxed text-slate-400">
+        Multi-step agent flow, grounded by Microsoft Foundry IQ.
+      </p>
+      <ol className="mt-4 space-y-3">
+        {stages.map((stage, index) => {
+          const isActive = index === activeIndex;
+          const status: "done" | "active" | "pending" = stage.done
+            ? "done"
+            : isActive
+            ? "active"
+            : "pending";
+
+          return (
+            <li key={stage.key} className="flex gap-3">
+              <div className="mt-0.5 flex flex-col items-center">
+                <span
+                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-semibold ${
+                    status === "done"
+                      ? "border-emerald-400/40 bg-emerald-400/15 text-emerald-300"
+                      : status === "active"
+                      ? "border-guardian-400/50 bg-guardian-400/15 text-guardian-200"
+                      : "border-white/15 bg-white/5 text-slate-500"
+                  }`}
+                >
+                  {status === "done" ? (
+                    <CheckCircle className="h-4 w-4" />
+                  ) : status === "active" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    index + 1
+                  )}
+                </span>
+                {index < stages.length - 1 && (
+                  <span
+                    className={`mt-1 h-5 w-px ${
+                      stage.done ? "bg-emerald-400/30" : "bg-white/10"
+                    }`}
+                  />
+                )}
+              </div>
+              <div className="flex-1 pb-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p
+                    className={`text-sm font-medium ${
+                      status === "pending" ? "text-slate-400" : "text-slate-100"
+                    }`}
+                  >
+                    {stage.label}
+                  </p>
+                  {stage.badge && (
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        stage.badge.includes("live")
+                          ? "bg-emerald-400/15 text-emerald-300"
+                          : "bg-amber-400/15 text-amber-200"
+                      }`}
+                    >
+                      {stage.badge}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-0.5 text-xs leading-relaxed text-slate-400">{stage.detail}</p>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+    </div>
   );
 }
 
