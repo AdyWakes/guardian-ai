@@ -13,6 +13,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const declaredSafetyRaw = body.declaredSafety;
+    const declaredSafety: AssessmentInput['declaredSafety'] =
+      declaredSafetyRaw === 'safe' || declaredSafetyRaw === 'unsafe' ? declaredSafetyRaw : 'unknown';
+
+    const placeContextRaw = body.placeContext;
+    const placeContext: AssessmentInput['placeContext'] =
+      placeContextRaw === 'home' || placeContextRaw === 'public' || placeContextRaw === 'vehicle'
+        ? placeContextRaw
+        : 'unknown';
+
     const input: AssessmentInput = {
       userMessage: body.userMessage,
       canSpeakSafely: body.canSpeakSafely ?? null,
@@ -21,6 +31,8 @@ export async function POST(request: NextRequest) {
       location: body.location ?? null,
       activationMode: body.activationMode === 'voice' ? 'voice' : 'typed',
       audioClipStatus: typeof body.audioClipStatus === 'string' ? body.audioClipStatus : null,
+      declaredSafety,
+      placeContext,
     };
 
     const assessment = await assessRisk(input);

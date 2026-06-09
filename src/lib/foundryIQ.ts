@@ -77,39 +77,83 @@ const API_VERSION = '2024-12-01-preview';
  * Source-of-truth for the agent's instructions. Kept in code (rather than
  * only in the Foundry portal) so the contract between the agent and the
  * Guardian risk pipeline is reviewable in the repo. The Foundry agent's
- * portal instructions should match this text. We intentionally do NOT
- * send `instructions` on each Responses API call - duplicating instructions
- * in two places risks unexpected merging behaviour, so we trust the portal
- * configuration as the runtime source.
+ * portal instructions MUST match this text - they are the runtime config.
+ * We intentionally do NOT send `instructions` on each Responses API call,
+ * because duplicating in two places risks merge-behaviour bugs.
+ *
+ * The agent does both retrieval (file_search over the safety corpus) AND
+ * risk reasoning (classify + summarize + recommend steps) in a single
+ * call. This satisfies both the Microsoft IQ requirement (Foundry IQ
+ * grounded retrieval) and the Reasoning Agents track (LLM reasoning over
+ * grounded knowledge) through one agent, one call.
  */
-export const SAFETY_AGENT_INSTRUCTIONS = `You are the Guardian AI safety knowledge retrieval agent.
+export const SAFETY_AGENT_INSTRUCTIONS = `You are the Guardian AI safety reasoning agent.
 
-Use the attached safety knowledge corpus (file_search) to retrieve the most relevant safety guidance for the user's situation.
+You receive a user's situation report along with structured safety facts. Use the attached safety knowledge corpus (file_search) to ground your reasoning, then return a complete safety assessment as JSON.
 
 Return ONLY a single JSON code block in this exact shape, with no prose before or after:
 
 \`\`\`json
 {
-  "knowledge": [
-    {
-      "id": "string identifier from the knowledge file footer",
-      "category": "string category from the knowledge file footer",
-      "title": "string title from the knowledge file",
-      "content": "Numbered safety steps as a single string in the format: '1) step one. 2) step two. 3) step three.'",
-      "urgencyLevel": "low | medium | high",
-      "sources": ["array of source attributions cited inside the knowledge file"]
-    }
-  ]
+  "risk_level": "LOW | MEDIUM | HIGH",
+  "reasoning_summary": "1-3 sentences in plain language explaining why this risk level applies. Reference the specific facts from the situation (e.g. 'You are alone at night and feel uncomfortable, but no specific threat is described.').",
+  "immediate_steps": [
+    "Most important action right now",
+    "Second priority",
+    "Third priority"
+  ],
+  "sources": ["filename.md", "another-filename.md"]
 }
 \`\`\`
 
-Rules:
-- Include 1 to 3 of the most relevant knowledge entries, ranked by relevance.
-- The "content" field MUST be a single string with numbered steps (do not return an array).
-- "urgencyLevel" reflects the severity of the matched scenario.
-- "sources" come from each knowledge file's own Sources section, not from the file name.
-- If no scenario is a strong match, return the general-safety entry.
-- Never invent guidance that is not grounded in the attached corpus.`;
+Risk classification rules:
+- HIGH if ANY of: user is being followed/threatened, user cannot speak safely, immediate physical danger (weapon, attack, kidnap, intruder), or a domestic situation escalating to violence.
+- MEDIUM if the user declares feeling unsafe, is alone in a non-home location, is in a vehicle they want to leave, is at a social venue with a concern, or describes an unfamiliar uncomfortable environment.
+- LOW if the user is checking in safely, is at home with no threat, asks a general safety question with no concrete concern, or describes a clearly resolved situation.
+
+Reasoning rules:
+- The reasoning_summary should be specific to THIS situation, not generic. Cite the facts that drove the classification.
+- Use second-person ("You are...") so it reads as direct feedback to the user.
+
+Action plan rules:
+- Return 3 to 5 immediate steps, ranked by urgency (most critical first).
+- Steps MUST be specific and actionable, not generic platitudes.
+- For HIGH risk, the first step should typically involve calling emergency services or moving to safety.
+- For MEDIUM risk, focus on situational awareness and de-escalation.
+- For LOW risk, light preventive guidance is sufficient.
+
+Sourcing rules:
+- "sources" is an array of the .md filenames you consulted via file_search (e.g. "night-walking.md").
+- Always ground recommendations in the attached corpus. If no scenario matches, ground in general-safety.md.
+- Never invent guidance that is not supported by the corpus.`;
+
+/**
+ * Structured assessment returned by the Foundry agent. Parallels
+ * RiskAssessment in riskAssessment.ts but without the locally-generated
+ * fields (emergency_message, is_demo_mode) - those stay in the calling
+ * pipeline so this module remains agent-only.
+ */
+export interface FoundryAssessmentResult {
+  risk_level: 'LOW' | 'MEDIUM' | 'HIGH';
+  reasoning_summary: string;
+  immediate_steps: string[];
+  sources: string[];
+}
+
+/**
+ * Input passed to the Foundry agent. Mirrors the fields the local risk
+ * pipeline already collects from the chat, so the agent has full
+ * situational context for grounded reasoning.
+ */
+export interface FoundryAssessmentInput {
+  userMessage: string;
+  canSpeakSafely: boolean | null;
+  isAlone: boolean | null;
+  isBeingFollowed: boolean | null;
+  location: { lat: number; lng: number } | null;
+  declaredSafety?: 'safe' | 'unsafe' | 'unknown';
+  placeContext?: 'home' | 'public' | 'vehicle' | 'unknown';
+}
 
 export const isFoundryConfigured = (): boolean => {
   return Boolean(
@@ -397,9 +441,105 @@ const fetchJson = async <T>(url: string, init?: RequestInit): Promise<T> => {
   return response.json() as Promise<T>;
 };
 
-const realRetrieveSafetyKnowledge = async (query: string): Promise<RetrievedKnowledge> => {
-  const agentId = process.env.AZURE_AI_AGENT_ID;
+/**
+ * Format a tri-state boolean fact for the agent prompt. The agent reads
+ * "Yes"/"No"/"Unknown" rather than true/false/null because LLMs handle
+ * natural-language enums more reliably than JSON-encoded booleans embedded
+ * in prose.
+ */
+const formatTriBool = (value: boolean | null | undefined): string => {
+  if (value === true) return 'Yes';
+  if (value === false) return 'No';
+  return 'Unknown';
+};
 
+const formatLocation = (
+  location: FoundryAssessmentInput['location'],
+): string => {
+  if (!location) return 'not available';
+  return `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}`;
+};
+
+/**
+ * Build the Responses API `input` string. Structured prose maximises the
+ * agent's ability to ground risk reasoning on the user's actual facts,
+ * not just keywords in the free-text userMessage.
+ */
+const buildAgentInput = (input: FoundryAssessmentInput): string => {
+  return [
+    'Safety situation:',
+    `"${input.userMessage.replace(/"/g, "'")}"`,
+    '',
+    'Known facts:',
+    `- Can speak safely: ${formatTriBool(input.canSpeakSafely)}`,
+    `- Is alone: ${formatTriBool(input.isAlone)}`,
+    `- Being followed/threatened: ${formatTriBool(input.isBeingFollowed)}`,
+    `- Place: ${input.placeContext ?? 'unknown'}`,
+    `- Declared safety: ${input.declaredSafety ?? 'unknown'}`,
+    '',
+    `Location: ${formatLocation(input.location)}`,
+  ].join('\n');
+};
+
+const VALID_RISK_LEVELS: ReadonlySet<string> = new Set(['LOW', 'MEDIUM', 'HIGH']);
+
+/**
+ * Parse the agent's JSON reasoning response into a FoundryAssessmentResult.
+ * Tolerant of trailing prose: looks for the first JSON code block, then
+ * for a bare JSON object if no code block is present.
+ */
+const parseAssessmentFromAgentText = (text: string): FoundryAssessmentResult | null => {
+  const jsonMatch = text.match(/```json\s*([\s\S]*?)```/) ?? text.match(/(\{[\s\S]*\})/);
+  const jsonText = jsonMatch?.[1] ?? jsonMatch?.[0];
+  if (!jsonText) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch {
+    return null;
+  }
+
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  const obj = parsed as Record<string, unknown>;
+
+  const riskRaw = typeof obj.risk_level === 'string' ? obj.risk_level.trim().toUpperCase() : '';
+  if (!VALID_RISK_LEVELS.has(riskRaw)) return null;
+
+  const reasoning = typeof obj.reasoning_summary === 'string' ? obj.reasoning_summary.trim() : '';
+  if (!reasoning) return null;
+
+  const stepsRaw = Array.isArray(obj.immediate_steps) ? obj.immediate_steps : [];
+  const steps = stepsRaw
+    .filter((step): step is string => typeof step === 'string')
+    .map((step) => step.trim())
+    .filter(Boolean);
+
+  if (steps.length === 0) return null;
+
+  const sourcesRaw = Array.isArray(obj.sources) ? obj.sources : [];
+  const sources = sourcesRaw
+    .filter((source): source is string => typeof source === 'string')
+    .map((source) => source.trim())
+    .filter(Boolean);
+
+  return {
+    risk_level: riskRaw as FoundryAssessmentResult['risk_level'],
+    reasoning_summary: reasoning,
+    immediate_steps: steps,
+    sources,
+  };
+};
+
+/**
+ * Call the Foundry agent with full situational context and parse a complete
+ * risk assessment from its JSON response. Throws on any error so the caller
+ * can decide whether to fall back to local-pipeline reasoning.
+ */
+export const assessWithFoundryAgent = async (
+  input: FoundryAssessmentInput,
+): Promise<FoundryAssessmentResult> => {
+  const agentId = process.env.AZURE_AI_AGENT_ID;
   if (!agentId) {
     throw new Error('Missing Azure AI agent id');
   }
@@ -411,11 +551,11 @@ const realRetrieveSafetyKnowledge = async (query: string): Promise<RetrievedKnow
     method: 'POST',
     headers,
     body: JSON.stringify({
-      // For Foundry agents, the `model` field carries the agent name. The
+      // The `model` field carries the agent name for Foundry agents. The
       // agent's portal-configured model, tools, instructions, and knowledge
       // sources are applied by Foundry on its side.
       model: agentId,
-      input: `Safety situation query: ${query}`,
+      input: buildAgentInput(input),
     }),
   });
 
@@ -428,38 +568,34 @@ const realRetrieveSafetyKnowledge = async (query: string): Promise<RetrievedKnow
   }
 
   const agentText = extractAgentText(envelope);
-  const knowledge = parseKnowledgeFromAgentText(agentText);
-
-  if (knowledge.length === 0) {
-    throw new Error('Foundry response did not contain usable safety knowledge');
+  const assessment = parseAssessmentFromAgentText(agentText);
+  if (!assessment) {
+    throw new Error('Foundry response did not contain a parseable risk assessment');
   }
 
-  // Prefer real file citations from the agent's file_search annotations over
-  // whatever the model put in the JSON "sources" field. Falls back to the
-  // model-reported sources when no annotations are present (e.g. if the
-  // agent answered without using file_search).
+  // Merge real file citations (from file_search annotations) with the
+  // model-reported sources, prioritising real citations when present.
   const fileCitations = extractFileCitations(envelope);
-  const modelReportedSources = knowledge.flatMap((item) => item.sources);
-  const mergedSources = fileCitations.length > 0
-    ? Array.from(new Set([...fileCitations, ...modelReportedSources]))
-    : Array.from(new Set(modelReportedSources));
+  const mergedSources =
+    fileCitations.length > 0
+      ? Array.from(new Set([...fileCitations, ...assessment.sources]))
+      : assessment.sources;
+
+  console.log(
+    `[Foundry IQ] Real agent call succeeded: risk=${assessment.risk_level}, steps=${assessment.immediate_steps.length}, sources=${mergedSources.length}`,
+  );
 
   return {
-    knowledge: knowledge.slice(0, 3),
+    ...assessment,
     sources: mergedSources,
-    isDemoMode: false,
   };
 };
 
+/**
+ * Demo-mode retrieval helper retained for the local risk pipeline used
+ * when Foundry isn't configured or the real agent call fails. Returns the
+ * top-scored knowledge entries from the local JSON corpus.
+ */
 export const retrieveSafetyKnowledge = async (query: string): Promise<RetrievedKnowledge> => {
-  if (!isFoundryConfigured()) {
-    return mockRetrieveSafetyKnowledge(query);
-  }
-
-  try {
-    return await realRetrieveSafetyKnowledge(query);
-  } catch (error) {
-    console.error('Falling back to mock Foundry IQ knowledge:', error);
-    return mockRetrieveSafetyKnowledge(query);
-  }
+  return mockRetrieveSafetyKnowledge(query);
 };

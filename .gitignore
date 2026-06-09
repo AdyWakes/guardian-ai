@@ -19,3 +19,6 @@ coverage/
 # Editor / local tooling
 .claude/
 .codex-*.log
+
+# TypeScript incremental build cache
+*.tsbuildinfo

@@ -1,4 +1,9 @@
-import { retrieveSafetyKnowledge, RetrievedKnowledge } from './foundryIQ';
+import {
+  assessWithFoundryAgent,
+  isFoundryConfigured,
+  retrieveSafetyKnowledge,
+  RetrievedKnowledge,
+} from './foundryIQ';
 
 export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 
@@ -19,6 +24,9 @@ export interface AssessmentInput {
   location: { lat: number; lng: number } | null;
   activationMode?: 'typed' | 'voice';
   audioClipStatus?: string | null;
+  /** Optional - chat-layer inferences passed through to the Foundry agent. */
+  declaredSafety?: 'safe' | 'unsafe' | 'unknown';
+  placeContext?: 'home' | 'public' | 'vehicle' | 'unknown';
 }
 
 const HIGH_RISK_KEYWORDS = [
@@ -246,7 +254,12 @@ ${riskLevel === 'HIGH' ? 'Consider contacting emergency services (911).' : ''}
 Sent via Guardian AI`;
 };
 
-export const assessRisk = async (input: AssessmentInput): Promise<RiskAssessment> => {
+/**
+ * Local-pipeline assessment used in demo mode AND as a graceful fallback
+ * when the Foundry agent is unreachable. Uses keyword scoring + templated
+ * reasoning so the demo never crashes for lack of LLM access.
+ */
+const assessRiskLocally = async (input: AssessmentInput): Promise<RiskAssessment> => {
   const knowledge = await retrieveSafetyKnowledge(input.userMessage);
   const riskLevel = classifyRisk(input);
   const reasoningSummary = generateReasoning(input);
@@ -259,6 +272,54 @@ export const assessRisk = async (input: AssessmentInput): Promise<RiskAssessment
     immediate_steps: immediateSteps,
     emergency_message: emergencyMessage,
     retrieved_sources: knowledge.sources,
-    is_demo_mode: knowledge.isDemoMode,
+    is_demo_mode: true,
   };
+};
+
+/**
+ * Production-path assessment. Sends the full situational context to the
+ * Foundry agent (file_search + LLM reasoning) and uses the agent's
+ * structured risk_level, reasoning_summary, immediate_steps, and sources
+ * directly. The locally-templated emergency_message is still generated
+ * here because it is pure formatting and doesn't need LLM reasoning.
+ */
+const assessRiskViaFoundry = async (input: AssessmentInput): Promise<RiskAssessment> => {
+  const foundryAssessment = await assessWithFoundryAgent({
+    userMessage: input.userMessage,
+    canSpeakSafely: input.canSpeakSafely,
+    isAlone: input.isAlone,
+    isBeingFollowed: input.isBeingFollowed,
+    location: input.location,
+    declaredSafety: input.declaredSafety,
+    placeContext: input.placeContext,
+  });
+
+  const emergencyMessage = generateEmergencyMessage(input, foundryAssessment.risk_level);
+
+  return {
+    risk_level: foundryAssessment.risk_level,
+    reasoning_summary: foundryAssessment.reasoning_summary,
+    immediate_steps: foundryAssessment.immediate_steps,
+    emergency_message: emergencyMessage,
+    retrieved_sources: foundryAssessment.sources,
+    is_demo_mode: false,
+  };
+};
+
+/**
+ * Top-level assessment entrypoint. Prefers the Foundry-grounded reasoning
+ * path when credentials are present; falls back to the local pipeline if
+ * Foundry is unconfigured or the agent call fails for any reason. This
+ * means the demo never goes dark, even if Azure has an outage mid-judging.
+ */
+export const assessRisk = async (input: AssessmentInput): Promise<RiskAssessment> => {
+  if (isFoundryConfigured()) {
+    try {
+      return await assessRiskViaFoundry(input);
+    } catch (error) {
+      console.error('Falling back to local risk pipeline:', error);
+    }
+  }
+
+  return assessRiskLocally(input);
 };
