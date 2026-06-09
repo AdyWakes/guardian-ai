@@ -1,0 +1,90 @@
+{
+  "safetyTopics": [
+    {
+      "id": "stalking-1",
+      "category": "stalking",
+      "title": "Being Followed - Immediate Actions",
+      "content": "If you believe you are being followed: 1) Stay in public, well-lit areas. 2) Do NOT go home - lead them away from your residence. 3) Head to a police station, fire station, or busy public place. 4) Call emergency services (911). 5) Document the follower - note physical description, clothing, vehicle details. 6) Keep your phone charged and accessible. 7) Tell someone your location immediately.",
+      "urgencyLevel": "high",
+      "sources": ["National Stalking Helpline", "Victim Support UK"]
+    },
+    {
+      "id": "unsafe-transport-1",
+      "category": "transport",
+      "title": "Unsafe Transportation Situation",
+      "content": "If you feel unsafe in a vehicle: 1) Share your live location with trusted contacts immediately. 2) Call emergency services discreetly if possible - you can pretend to order food while actually calling 911. 3) Note the vehicle make, model, color, and license plate. 4) If safe, ask to be let out at a busy, public location. 5) Sit in the back seat behind the driver for easier exit. 6) Trust your instincts - it's better to be rude than unsafe.",
+      "urgencyLevel": "high",
+      "sources": ["RAINN Safety Tips", "National Safety Council"]
+    },
+    {
+      "id": "unsafe-place-1",
+      "category": "unsafe-location",
+      "title": "Unknown Unsafe Place - Immediate Measures",
+      "content": "If you feel unsafe but do not know the exact threat: 1) Move toward a public, well-lit, populated place. 2) Keep your phone unlocked and ready. 3) Share your live location with a trusted contact if safe. 4) Do not go to a private or isolated location. 5) If someone approaches or blocks you, call emergency services immediately. 6) Prepare an exit route and keep distance from suspicious people.",
+      "urgencyLevel": "medium",
+      "sources": ["Personal Safety Experts", "Police Safety Advice"]
+    },
+    {
+      "id": "bar-club-1",
+      "category": "social",
+      "title": "Feeling Unsafe at a Bar/Club",
+      "content": "If you feel unsafe in a social venue: 1) Locate venue security/bouncers immediately. 2) Ask staff for help - bartenders are trained to assist. 3) Use the 'Angel Shot' code phrase if available (signals you need help). 4) Move to well-lit, populated areas. 5) Text your location and situation to friends. 6) Do not leave alone - wait for trusted transport or friends.",
+      "urgencyLevel": "medium",
+      "sources": ["Safe Bar Network", "Women's Safety Guidelines"]
+    },
+    {
+      "id": "home-intruder-1",
+      "category": "home",
+      "title": "Potential Home Intruder",
+      "content": "If you suspect someone is in or trying to enter your home: 1) Stay quiet and do not confront. 2) Call 911 immediately - whisper if necessary. 3) Lock yourself in a room with a sturdy door. 4) Stay on the line with emergency services. 5) Do NOT hide in closets - they are traps. 6) If you must flee, prioritize exits. 7) Have an escape route planned.",
+      "urgencyLevel": "high",
+      "sources": ["Home Security Experts", "Police Safety Guidelines"]
+    },
+    {
+      "id": "domestic-1",
+      "category": "domestic",
+      "title": "Domestic Situation Escalation",
+      "content": "If a domestic situation is becoming unsafe: 1) De-escalate verbally if possible - use calm, non-confrontational tone. 2) Identify safe exits and plan your escape route. 3) Keep your phone charged and accessible. 4) Have a code word with trusted contacts. 5) If violence occurs, protect your head and vital organs. 6) Call 911 when safe to do so. 7) Remember: your safety is the priority.",
+      "urgencyLevel": "high",
+      "sources": ["National Domestic Violence Hotline", "Safe Horizon"]
+    },
+    {
+      "id": "general-low-1",
+      "category": "general",
+      "title": "General Safety Precautions",
+      "content": "Everyday safety tips: 1) Stay aware of your surroundings. 2) Keep your phone charged. 3) Share your location with trusted contacts when going out. 4) Trust your instincts - if something feels wrong, act on it. 5) Have emergency contacts easily accessible. 6) Know the locations of nearby safe places (police stations, hospitals, 24-hour businesses).",
+      "urgencyLevel": "low",
+      "sources": ["Personal Safety Experts"]
+    },
+    {
+      "id": "safe-home-checkin-1",
+      "category": "home",
+      "title": "Safe at Home Check-In",
+      "content": "If you are safe at home and just checking in: 1) Keep your phone charged and nearby. 2) Lock doors and windows if that is normal for your situation. 3) Let a trusted contact know you are safe if someone may be worried. 4) Stay on standby and reassess only if something changes. 5) Do not send an emergency alert unless a new threat appears.",
+      "urgencyLevel": "low",
+      "sources": ["Personal Safety Experts"]
+    },
+    {
+      "id": "night-walking-1",
+      "category": "walking",
+      "title": "Walking Alone at Night",
+      "content": "Night walking safety: 1) Stick to well-lit, populated routes. 2) Keep your phone accessible but avoid being distracted by it. 3) Walk confidently and with purpose. 4) Avoid isolated areas, shortcuts through dark areas. 5) Keep one ear free if using headphones. 6) Carry a personal alarm or whistle. 7) Have your keys ready before reaching your destination.",
+      "urgencyLevel": "medium",
+      "sources": ["Police Safety Advice", "Personal Security Blogs"]
+    },
+    {
+      "id": "online-meeting-1",
+      "category": "online",
+      "title": "Unsafe Online Meeting",
+      "content": "Meeting someone from online who makes you uncomfortable: 1) Always meet in public places. 2) Tell someone your location, who you're meeting, and when you'll check in. 3) Have an exit plan - arrange for a friend to call with an 'emergency'. 4) Do not share personal information (home address, workplace). 5) Trust your instincts - leave if you feel uncomfortable. 6) Drive yourself or use your own transport.",
+      "urgencyLevel": "medium",
+      "sources": ["Online Dating Safety", "Cyber Safety Resources"]
+    }
+  ],
+  "emergencyContacts": {
+    "universal": "911 (Emergency Services)",
+    "domesticViolence": "1-800-799-SAFE (7233)",
+    "sexualAssault": "1-800-656-HOPE (4673)",
+    "crisisText": "Text HOME to 741741"
+  }
+}
