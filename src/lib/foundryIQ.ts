@@ -21,9 +21,18 @@ interface FoundryRun {
   status?: string;
 }
 
+type MessageAnnotation = {
+  type?: string;
+  text?: string;
+  file_citation?: {
+    file_id?: string;
+    quote?: string;
+  };
+};
+
 type MessageContentBlock = {
   type?: string;
-  text?: string | { value?: string };
+  text?: string | { value?: string; annotations?: MessageAnnotation[] };
 };
 
 type FoundryMessage = {
@@ -31,9 +40,40 @@ type FoundryMessage = {
   content?: string | MessageContentBlock[];
 };
 
-const API_VERSION = 'v1';
-const MAX_RUN_POLLS = 8;
+// Azure AI Foundry Agent Service API version.
+// 'v1' is NOT a valid Foundry api-version and will 404.
+const API_VERSION = '2024-12-01-preview';
+const MAX_RUN_POLLS = 16;
 const POLL_INTERVAL_MS = 750;
+
+const SAFETY_AGENT_INSTRUCTIONS = `You are the Guardian AI safety knowledge retrieval agent.
+
+Use the attached safety knowledge corpus (file_search) to retrieve the most relevant safety guidance for the user's situation.
+
+Return ONLY a single JSON code block in this exact shape, with no prose before or after:
+
+\`\`\`json
+{
+  "knowledge": [
+    {
+      "id": "string identifier from the knowledge file footer",
+      "category": "string category from the knowledge file footer",
+      "title": "string title from the knowledge file",
+      "content": "Numbered safety steps as a single string in the format: '1) step one. 2) step two. 3) step three.'",
+      "urgencyLevel": "low | medium | high",
+      "sources": ["array of source attributions cited inside the knowledge file"]
+    }
+  ]
+}
+\`\`\`
+
+Rules:
+- Include 1 to 3 of the most relevant knowledge entries, ranked by relevance.
+- The "content" field MUST be a single string with numbered steps (do not return an array).
+- "urgencyLevel" reflects the severity of the matched scenario.
+- "sources" come from each knowledge file's own Sources section, not from the file name.
+- If no scenario is a strong match, return the general-safety entry.
+- Never invent guidance that is not grounded in the attached corpus.`;
 
 export const isFoundryConfigured = (): boolean => {
   return Boolean(
@@ -216,6 +256,41 @@ const extractTextFromMessage = (message: FoundryMessage): string => {
     .join('\n');
 };
 
+/**
+ * Extract real file citations from an assistant message produced by the
+ * Foundry agent. When file_search runs, each cited passage produces an
+ * annotation whose `text` field typically looks like 【4:0†filename.md】.
+ * We surface the filename as the source attribution shown in the Guardian UI.
+ */
+const extractFileCitationsFromMessage = (message: FoundryMessage): string[] => {
+  if (!Array.isArray(message.content)) {
+    return [];
+  }
+
+  const citations = new Set<string>();
+
+  for (const block of message.content) {
+    if (typeof block.text !== 'object' || !block.text?.annotations) {
+      continue;
+    }
+
+    for (const annotation of block.text.annotations) {
+      if (annotation.type !== 'file_citation') {
+        continue;
+      }
+
+      const filenameMatch = annotation.text?.match(/【\d+:\d+†([^】]+)】/);
+      if (filenameMatch?.[1]) {
+        citations.add(filenameMatch[1].trim());
+      } else if (annotation.file_citation?.file_id) {
+        citations.add(annotation.file_citation.file_id);
+      }
+    }
+  }
+
+  return Array.from(citations);
+};
+
 const normalizeKnowledge = (item: Partial<SafetyKnowledge>, index: number): SafetyKnowledge | null => {
   if (!item.content && !item.title) {
     return null;
@@ -290,8 +365,7 @@ const realRetrieveSafetyKnowledge = async (query: string): Promise<RetrievedKnow
     headers,
     body: JSON.stringify({
       assistant_id: agentId,
-      instructions:
-        'Retrieve concise safety knowledge for Guardian AI. Return JSON with a knowledge array. Each item must include id, category, title, content, urgencyLevel, and sources.',
+      instructions: SAFETY_AGENT_INSTRUCTIONS,
       thread: {
         messages: [
           {
@@ -336,9 +410,19 @@ const realRetrieveSafetyKnowledge = async (query: string): Promise<RetrievedKnow
     throw new Error('Foundry response did not contain usable safety knowledge');
   }
 
+  // Prefer real file citations from the agent's file_search annotations over
+  // whatever the model put in the JSON "sources" field. Falls back to the
+  // model-reported sources when no annotations are present (e.g. if the
+  // agent answered without using file_search).
+  const fileCitations = assistantMessage ? extractFileCitationsFromMessage(assistantMessage) : [];
+  const modelReportedSources = knowledge.flatMap((item) => item.sources);
+  const mergedSources = fileCitations.length > 0
+    ? Array.from(new Set([...fileCitations, ...modelReportedSources]))
+    : Array.from(new Set(modelReportedSources));
+
   return {
     knowledge: knowledge.slice(0, 3),
-    sources: Array.from(new Set(knowledge.flatMap((item) => item.sources))),
+    sources: mergedSources,
     isDemoMode: false,
   };
 };
