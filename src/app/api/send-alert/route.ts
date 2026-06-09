@@ -3,6 +3,10 @@ import { sendTelegramAlert, TelegramAttachment } from '@/lib/telegram';
 import { sendWhatsAppAlert, WhatsAppAttachment } from '@/lib/whatsapp';
 import { guardSensitiveRoute } from '@/lib/apiGuard';
 
+// Uploads media to Telegram (and optionally WhatsApp); raise the serverless
+// ceiling above the 10s default so clip delivery has headroom.
+export const maxDuration = 30;
+
 const buildUserAlertMessage = ({
   telegramResult,
   whatsAppResult,

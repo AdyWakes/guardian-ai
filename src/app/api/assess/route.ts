@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { assessRisk, AssessmentInput } from '@/lib/riskAssessment';
 
+// Calls the Foundry agent for grounded reasoning; raise the serverless
+// ceiling above the 10s default to absorb cold-start / retrieval latency.
+export const maxDuration = 30;
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();

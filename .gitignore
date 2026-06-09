@@ -21,4 +21,8 @@ coverage/
 .codex-*.log
 
 # TypeScript incremental build cache
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# TypeScript incremental build cache
 *.tsbuildinfo

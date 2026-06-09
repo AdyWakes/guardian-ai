@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { respondToSafetyMessage } from '@/lib/safetyConversation';
 
+// This route may call the Foundry agent (via assessRisk) which can take a few
+// seconds. Raise the serverless ceiling above the 10s default for headroom.
+export const maxDuration = 30;
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
