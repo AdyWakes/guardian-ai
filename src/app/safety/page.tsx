@@ -130,6 +130,52 @@ const blobToDataUrl = (blob: Blob) =>
     reader.readAsDataURL(blob);
   });
 
+// Sentinel error so callers can distinguish "user never answered the
+// permission prompt" (timeout) from "user denied / no device" (real
+// getUserMedia rejection).
+const MEDIA_PERMISSION_TIMEOUT = "media-permission-timeout";
+
+/**
+ * getUserMedia that cannot hang forever. The browser permission prompt has
+ * no built-in timeout, so if the user dismisses it (or the prompt stalls),
+ * the raw getUserMedia promise never settles - which would freeze the entire
+ * emergency-alert flow behind it. This races it against a timeout and, if the
+ * stream resolves late, stops its tracks so we don't leave the camera light
+ * on.
+ */
+const getUserMediaWithTimeout = (
+  constraints: MediaStreamConstraints,
+  timeoutMs: number,
+): Promise<MediaStream> =>
+  new Promise<MediaStream>((resolve, reject) => {
+    let settled = false;
+    const timer = window.setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        reject(new Error(MEDIA_PERMISSION_TIMEOUT));
+      }
+    }, timeoutMs);
+
+    navigator.mediaDevices.getUserMedia(constraints).then(
+      (stream) => {
+        if (settled) {
+          // Timed out already - clean up the late stream.
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        settled = true;
+        window.clearTimeout(timer);
+        resolve(stream);
+      },
+      (error) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+
 const getLiveStatusText = (risk: RiskLevel, state: AssessmentState) => {
   if (!state.userMessage) {
     return "Tell Guardian what is happening. The status will update as you talk.";
@@ -304,15 +350,28 @@ export default function SafetyPage() {
       ? "audio/webm;codecs=opus"
       : "audio/webm";
 
+    // Allow up to 12s for the permission prompt + capture handshake. Long
+    // enough for a user to click "Allow", short enough that a dismissed
+    // prompt cannot freeze the emergency-alert flow.
+    const MEDIA_TIMEOUT_MS = 12000;
+
     let stream: MediaStream;
     let type: AlertAttachment["type"] = "video";
     let mimeType = videoMimeType;
 
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
-    } catch {
+      stream = await getUserMediaWithTimeout({ audio: true, video: true }, MEDIA_TIMEOUT_MS);
+    } catch (videoError) {
+      // If the prompt timed out, the user isn't responding to permission
+      // dialogs - retrying for audio would just hang on a second prompt.
+      // Proceed with no clip so the text alert still goes out promptly.
+      if (videoError instanceof Error && videoError.message === MEDIA_PERMISSION_TIMEOUT) {
+        return [];
+      }
+
+      // Video was explicitly denied or unavailable - try an audio-only clip.
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        stream = await getUserMediaWithTimeout({ audio: true, video: false }, MEDIA_TIMEOUT_MS);
         type = "audio";
         mimeType = audioMimeType;
       } catch {
