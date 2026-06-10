@@ -19,7 +19,7 @@ Before submission:
 2. Add short notes and screenshots to `docs/copilot-usage.md`.
 3. Mention Copilot usage in the demo video or README.
 
-Do not rely on this Codex chat as Copilot evidence. The requirement specifically names GitHub Copilot.
+Note: automated AI assistant conversations do not count as Copilot evidence. The requirement specifically names GitHub Copilot.
 
 ## Microsoft IQ Requirement
 

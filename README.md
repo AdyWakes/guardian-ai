@@ -105,8 +105,8 @@ Guardian AI works out of the box without API keys.
 Demo mode uses:
 
 - Mock Foundry IQ retrieval from `data/safetyKnowledge.json`.
-- A fake trusted Telegram contact and optional demo WhatsApp channel.
-- A fake location button using Seattle coordinates.
+- A simulated trusted Telegram contact and optional demo WhatsApp channel.
+- A demo location button using Seattle coordinates.
 - Browser speech recognition where available for the "Guardian ..." voice demo.
 - Demo media attachment handling for automatic alert clips.
 - A visible Demo Mode banner in Safety Mode.

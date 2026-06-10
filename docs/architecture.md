@@ -187,7 +187,7 @@ This module owns Telegram delivery.
 
 - `sendTelegramAlert(message)` sends a real Telegram alert when credentials exist.
 - If credentials are missing, it returns a demo success response.
-- The demo response names a fake trusted Telegram contact for judging clarity.
+- The demo response names a simulated trusted Telegram contact for judging clarity.
 
 ### src/lib/whatsapp.ts
 
@@ -219,7 +219,7 @@ Demo mode includes:
 - Demo location button.
 - Assistant Mode panel with the wake phrase "Guardian".
 - Browser speech recognition where available.
-- Fake trusted Telegram contact.
+- Simulated trusted Telegram contact.
 - Optional WhatsApp demo channel.
 - Visible demo banner.
 - No real Telegram emergency alert delivery unless Telegram credentials are configured.
