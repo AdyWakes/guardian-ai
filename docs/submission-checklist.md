@@ -1,67 +1,74 @@
-# Submission Checklist
+# Submission Checklist — Microsoft Agents League
 
-Use this before submitting Guardian AI to Microsoft Agents League.
+Guardian AI is entered in the **Reasoning Agents** challenge, whose required
+developer technology is **Microsoft Foundry**.
 
-## Required
+> Always confirm against the official rules on the Contest Website before
+> submitting — this checklist reflects the published "How to Enter" /
+> submission requirements as of writing.
 
-- Public GitHub repository.
-- README with setup, demo mode, safety disclaimer, and judging alignment.
-- GitHub Copilot usage documented in `docs/copilot-usage.md`.
-- Microsoft IQ integration documented and visible in code.
-- Demo video.
-- Prototype disclaimer shown in app and README.
+## Required developer technology (per challenge)
 
-## GitHub Copilot Requirement
+| Challenge | Required tech | Used here? |
+|---|---|---|
+| Creative Apps | GitHub Copilot | — |
+| **Reasoning Agents** | **Microsoft Foundry** | ✅ Yes |
+| Enterprise Agents | Microsoft 365 Copilot | — |
 
-Before submission:
+GitHub Copilot is the technology for the *Creative Apps* challenge and is **not
+required** for Reasoning Agents. No Copilot evidence is needed for this entry.
 
-1. Use GitHub Copilot or Copilot Chat on at least a few real development tasks.
-2. Add short notes and screenshots to `docs/copilot-usage.md`.
-3. Mention Copilot usage in the demo video or README.
+## Submission requirements
 
-Note: automated AI assistant conversations do not count as Copilot evidence. The requirement specifically names GitHub Copilot.
+- [x] **Working Agent built with the required tool (Microsoft Foundry).**
+      A single Azure AI Foundry agent does grounded retrieval (file_search over
+      the safety corpus) + multi-step risk reasoning per call.
+- [x] **Public GitHub repository** with the source code:
+      https://github.com/AdyWakes/guardian-ai
+- [x] **Architecture diagram** showing how the solution uses Microsoft Foundry:
+      see [docs/architecture.md](architecture.md) (Mermaid diagram).
+- [ ] **Demo video (5 minutes max)** showing the project in action, uploaded to
+      YouTube or Vimeo. Must not include third-party trademarks or copyrighted
+      material (watch background music; avoid prominent third-party logos).
+- [ ] **Project description** explaining features, functionality, problem
+      solved, and technologies used: draft in
+      [docs/submission-description.md](submission-description.md).
+- [ ] **Team member info / Microsoft Learn usernames** (if applicable).
+- [ ] **Register, activate profile, and submit** the Agent + Demo Video via the
+      "Projects" tab on the Contest Website.
 
-## Microsoft IQ Requirement
+## Microsoft Foundry integration (the core requirement)
 
-Guardian AI uses Foundry IQ as the Microsoft IQ layer:
+- Code boundary: [`src/lib/foundryIQ.ts`](../src/lib/foundryIQ.ts)
+- Live function: `assessWithFoundryAgent(input)`
+- Real path: Azure AI Foundry agent via the Responses API with `agent_reference`
+- Grounding: file_search over the markdown corpus in
+  [`data/foundry-knowledge/`](../data/foundry-knowledge)
+- Demo path: local `data/safetyKnowledge.json` fallback so judges can run it
+  without credentials
 
-- Code boundary: `src/lib/foundryIQ.ts`
-- Public live function: `assessWithFoundryAgent(input)`
-- Real path: Azure AI Foundry Agent Service Responses API with `agent_reference`
-- Demo path: local `data/safetyKnowledge.json` fallback
-
-For the strongest submission, configure a real Foundry Agent and show `/api/status` returning:
+To prove the live integration, `GET /api/status` returns:
 
 ```json
-{
-  "foundry_configured": true
-}
+{ "is_demo_mode": false, "foundry_configured": true }
 ```
 
-If you submit without Foundry credentials, explain that the Foundry IQ adapter is implemented and demo mode uses a local mock fallback for judge reliability. This is weaker than a live Foundry demo.
+and an assessment returns a real `reasoning_summary` plus `.md` source
+citations (visible as the "Foundry IQ · live" badge in the UI).
 
-## Demo Video Flow
+## Demo video flow (≤5 min)
 
-1. Show landing page.
-2. Mention prototype disclaimer.
-3. Show Safety Mode.
-4. Say or type: `Very unsafe place, take the appropriate measures`.
-5. Show automatic location/media permission flow.
-6. Show risk card, action plan, retrieved sources, and alert result.
-7. Show `/api/status` or README section explaining Foundry IQ integration.
-8. Mention GitHub Copilot evidence in `docs/copilot-usage.md`.
+1. Landing page → mention prototype disclaimer.
+2. Safety Mode: type "I feel unsafe walking home alone at night".
+3. Answer a follow-up; show the right-rail reasoning trace filling in.
+4. Point out the **"Foundry IQ · live"** badge (real Microsoft Foundry grounding).
+5. Show the risk card, action plan, and source citations.
+6. Trigger Send Alert; show the alert arriving in Telegram.
+7. Briefly show `/api/status` (`is_demo_mode: false`) or the architecture diagram.
 
-## Environment Variables
+## Security note
 
-Required for live integrations:
-
-```env
-AZURE_AI_FOUNDRY_ENDPOINT=
-AZURE_AI_FOUNDRY_API_KEY=
-AZURE_AI_AGENT_NAME=
-AZURE_AI_AGENT_VERSION=
-TELEGRAM_BOT_TOKEN=
-TELEGRAM_CHAT_ID=
-```
-
-Never commit real secrets to GitHub.
+Rotate the Telegram bot token and Azure Foundry API key before final
+submission if they have been exposed during development. The live app reads
+secrets from Vercel environment variables, so rotation does not affect judges.
+Never commit real secrets (`.env.local` is gitignored).

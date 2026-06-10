@@ -68,13 +68,6 @@ When Foundry credentials are missing or a Foundry call fails, the adapter falls 
 
 The app includes a local demo responder so judges can test without keys. Full ChatGPT/Gemini-style open-ended intelligence requires a configured Azure AI Foundry Agent behind the same backend boundary.
 
-## GitHub Copilot Usage
-
-GitHub Copilot was used during development to accelerate TypeScript work,
-explain Next.js and Azure AI Foundry integration code, and help debug the
-safety-conversation flow. Prompts, suggestions, and screenshots are documented
-in [docs/copilot-usage.md](docs/copilot-usage.md).
-
 ## Agent Response Shape
 
 The `/api/assess` route returns the hackathon-facing contract:
@@ -259,13 +252,14 @@ Guardian AI is a prototype for demonstration purposes only.
 
 Guardian AI aligns with the Reasoning Agents track through:
 
-- Required GitHub Copilot documentation in `docs/copilot-usage.md`.
+- **Microsoft Foundry** as the required developer technology: a single Azure AI
+  Foundry agent performs both grounded knowledge retrieval (Foundry IQ /
+  file_search) and multi-step risk reasoning in one call.
 - A multi-step reasoning flow: user context, follow-up questions, location, risk classification, action plan, and alert preview.
-- Foundry IQ retrieval through a backend abstraction that can call Azure AI Foundry Agent Service.
-- Grounded safety guidance with displayed sources.
-- Explainable risk summaries.
+- Grounded safety guidance with displayed source citations.
+- Explainable, situation-specific risk summaries.
 - A working demo mode that judges can run without credentials.
-- A deployment-ready Next.js and Vercel architecture.
+- A deployment-ready Next.js and Vercel architecture (live deployment).
 
 See [docs/submission-checklist.md](docs/submission-checklist.md) before final submission.
 
