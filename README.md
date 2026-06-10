@@ -39,6 +39,14 @@ This prototype is designed for demos and judging. It is not a replacement for em
 - Automatic alert flow for urgent phrases such as "Very unsafe place, take the appropriate measures"; the browser requests location and a short video clip, falls back to audio if camera access is blocked, then sends the alert.
 - Demo mode that works without real API keys.
 
+## Architecture
+
+See [docs/architecture.md](docs/architecture.md) for the full architecture
+diagram (rendered on GitHub). In short: the browser chat UI calls Next.js API
+routes, which delegate to a single **Azure AI Foundry agent** that performs both
+grounded knowledge retrieval (Foundry IQ `file_search`) and multi-step risk
+reasoning in one call, then alerts are delivered via the Telegram Bot API.
+
 ## Microsoft IQ / Foundry IQ Integration
 
 The Microsoft IQ integration is isolated in [src/lib/foundryIQ.ts](src/lib/foundryIQ.ts). The risk assessment pipeline calls the configured Azure AI Foundry agent first, then falls back to local mock knowledge if Foundry is unavailable.

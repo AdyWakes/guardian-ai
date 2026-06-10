@@ -2,39 +2,58 @@
 
 ## Overview
 
-Guardian AI is a Next.js App Router application that combines a browser chat UI, server-side risk reasoning, Foundry IQ retrieval, Telegram alert delivery, and optional WhatsApp Cloud API delivery.
+Guardian AI is a Next.js App Router application that combines a browser chat UI, server-side risk reasoning, **Microsoft Foundry** retrieval-plus-reasoning, Telegram alert delivery, and optional WhatsApp Cloud API delivery.
+
+The core of the system is a single **Azure AI Foundry agent** that performs both
+grounded knowledge retrieval (Foundry IQ / `file_search` over the safety corpus)
+and multi-step risk reasoning in one call — satisfying the Reasoning Agents
+challenge's Microsoft Foundry requirement.
+
+```mermaid
+flowchart TD
+    subgraph Browser["🌐 Browser (Next.js client)"]
+        UI["Safety Mode chat UI<br/>· reasoning trace<br/>· geolocation · voice wake"]
+    end
+
+    subgraph Server["▲ Next.js API routes (Vercel serverless)"]
+        CHAT["/api/chat<br/>conversation state machine"]
+        ASSESS["/api/assess<br/>risk assessment"]
+        ALERT["/api/send-alert<br/>(origin guard + rate limit)"]
+        STATUS["/api/status"]
+    end
+
+    subgraph Foundry["🧠 Microsoft Foundry"]
+        AGENT["Azure AI Foundry Agent<br/><b>guardian-safety-retriever</b><br/>Responses API · agent_reference"]
+        KNOW[("Foundry IQ knowledge<br/>file_search vector store<br/>data/foundry-knowledge/*.md")]
+        AGENT -->|file_search| KNOW
+    end
+
+    LOCAL[("Local fallback<br/>data/safetyKnowledge.json")]
+    TG["📨 Telegram Bot API<br/>(real alert + media clip)"]
+    WA["WhatsApp Cloud API<br/>(optional)"]
+
+    UI -->|"message"| CHAT
+    UI -->|"assess"| ASSESS
+    UI -->|"send alert"| ALERT
+    UI -->|"config check"| STATUS
+
+    CHAT --> ASSESS
+    ASSESS -->|"grounded retrieval + multi-step reasoning"| AGENT
+    AGENT -->|"risk_level, reasoning_summary,<br/>steps, cited sources"| ASSESS
+    ASSESS -.->|"if Foundry unconfigured/fails"| LOCAL
+
+    ALERT --> TG
+    ALERT --> WA
+```
+
+A plain-text version of the same flow:
 
 ```text
-+---------------------------+
-| Browser                   |
-| - Landing page            |
-| - Safety Mode chat        |
-| - Geolocation API         |
-| - Voice wake demo         |
-+-------------+-------------+
-              |
-              v
-+---------------------------+
-| Next.js API routes        |
-| - /api/status             |
-| - /api/assess             |
-| - /api/send-alert         |
-+------+------+-------------+
-       |      |
-       |      v
-       |  +------------------+
-       |  | Telegram Bot API |
-       |  +------------------+
-       |  +------------------+
-       |  | WhatsApp Cloud   |
-       |  | API (optional)   |
-       |  +------------------+
-       v
-+---------------------------+
-| Foundry IQ adapter        |
-| - Azure AI Foundry Agent  |
-| - local JSON fallback     |
-+---------------------------+
+Browser (chat UI)
+   -> /api/chat -> /api/assess --> Azure AI Foundry Agent --> Foundry IQ (file_search corpus)
+                                |  (grounded retrieval + multi-step reasoning, one call)
+                                `-> local JSON fallback if Foundry is unavailable
+   -> /api/send-alert -> Telegram Bot API (+ optional WhatsApp)
 ```
 
 ## Runtime Flow
