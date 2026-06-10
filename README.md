@@ -83,13 +83,22 @@ The `/api/assess` route returns the hackathon-facing contract:
 ```json
 {
   "risk_level": "HIGH",
-  "reasoning_summary": "User reports being followed or threatened.",
-  "immediate_steps": ["Call emergency services now if there is immediate danger"],
+  "reasoning_summary": "You are alone and report being followed, and you cannot speak safely, which indicates immediate danger.",
+  "immediate_steps": [
+    "Call emergency services now if there is immediate danger",
+    "Move toward a public, well-lit, populated place",
+    "Share your live location with a trusted contact"
+  ],
   "emergency_message": "[URGENT] SAFETY ALERT - HIGH RISK...",
-  "retrieved_sources": ["Azure AI Foundry Agent Service"],
+  "retrieved_sources": ["stalking-being-followed.md", "unsafe-place.md"],
   "is_demo_mode": false
 }
 ```
+
+`reasoning_summary`, `immediate_steps`, and `retrieved_sources` come directly
+from the Microsoft Foundry agent (grounded LLM reasoning + file_search
+citations). When Foundry is unconfigured or unreachable, the same shape is
+returned by the local fallback pipeline with `is_demo_mode: true`.
 
 Voice-activated demo assessments also include this metadata inside the alert message:
 
