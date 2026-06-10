@@ -11,11 +11,11 @@ challenge's Microsoft Foundry requirement.
 
 ```mermaid
 flowchart TD
-    subgraph Browser["🌐 Browser (Next.js client)"]
+    subgraph Browser["🌐 Browser — Next.js client"]
         UI["Safety Mode chat UI<br/>· reasoning trace<br/>· geolocation · voice wake"]
     end
 
-    subgraph Server["▲ Next.js API routes (Vercel serverless)"]
+    subgraph Server["▲ Next.js API routes — Vercel serverless"]
         CHAT["/api/chat<br/>conversation state machine"]
         ASSESS["/api/assess<br/>risk assessment"]
         ALERT["/api/send-alert<br/>(origin guard + rate limit)"]
