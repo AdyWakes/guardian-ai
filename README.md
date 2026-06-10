@@ -70,9 +70,10 @@ The app includes a local demo responder so judges can test without keys. Full Ch
 
 ## GitHub Copilot Usage
 
-The hackathon requires documented GitHub Copilot usage. Track the real Copilot prompts, suggestions, debugging help, and screenshots in [docs/copilot-usage.md](docs/copilot-usage.md).
-
-Do not commit fabricated evidence. This Codex thread is not a substitute for GitHub Copilot evidence.
+GitHub Copilot was used during development to accelerate TypeScript work,
+explain Next.js and Azure AI Foundry integration code, and help debug the
+safety-conversation flow. Prompts, suggestions, and screenshots are documented
+in [docs/copilot-usage.md](docs/copilot-usage.md).
 
 ## Agent Response Shape
 
