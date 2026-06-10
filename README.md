@@ -278,8 +278,6 @@ Guardian AI aligns with the Reasoning Agents track through:
 - A working demo mode that judges can run without credentials.
 - A deployment-ready Next.js and Vercel architecture (live deployment).
 
-See [docs/submission-checklist.md](docs/submission-checklist.md) before final submission.
-
 ## Demo Video Checklist
 
 - Show the landing page and Start Safety Mode.
